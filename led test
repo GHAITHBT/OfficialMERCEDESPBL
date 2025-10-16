@@ -1,3 +1,55 @@
+def initialize_all_i2c_devices():
+    """Initialize all I2C devices from the mapping"""
+    addresses_to_initialize = [
+        "0x20", "0x21", "0x23", "0x26", 
+        "0x24", "0x22", "0x27", "0x25"
+    ]
+    
+    for address in addresses_to_initialize:
+        try:
+            if address not in mcp_devices:  # Only initialize if not already initialized
+                if address in ["0x20", "0x23", "0x24", "0x27"]:
+                    mcp_devices[address] = MCP23017(i2c, address=int(address, 16))
+                    print(f"✅ Initialized MCP23017 at address {address}")
+                else:
+                    mcp_devices[address] = MCP23008(i2c, address=int(address, 16))
+                    print(f"✅ Initialized MCP23008 at address {address}")
+        except Exception as e:
+            print(f"❌ Failed to initialize {address}: {e}")
+
+# Call this in your main function after initialize_gpio(config)
+
+
+def main():
+    if not config:
+        print("No configuration found.")
+        return
+
+    initialize_gpio(config)
+    print("GPIO initialized.")
+    
+    # ADD THIS LINE - Initialize all I2C devices
+    initialize_all_i2c_devices()
+    
+    monitor_thread = Thread(target=monitor_connectivity, daemon=True)
+    monitor_thread.start()
+    print("Connectivity monitoring started.")
+    
+    # Check all LEDs by turning them on for 5 seconds and then off
+    check_leds(config)
+
+    try:
+        # Start Flask app
+        app.run(host='0.0.0.0', port=5000)
+    except KeyboardInterrupt:
+        print("\nExiting...")
+    finally:
+        # Clean up GPIO on exit
+        GPIO.cleanup()
+
+
+
+
 @app.route('/test_led_by_index', methods=['POST'])
 def test_led_by_index():
     """Simple endpoint to control individual LEDs by material index"""
@@ -5,6 +57,9 @@ def test_led_by_index():
         data = request.json
         material_index = data.get('material_index')
         action = data.get('action')  # 'on' or 'off'
+        
+        print(f"🔧 Testing LED - Material: {material_index}, Action: {action}")
+        print(f"🔧 Available I2C devices: {list(mcp_devices.keys())}")
         
         # Simple mapping for materials 1-48
         mapping = {
@@ -24,23 +79,30 @@ def test_led_by_index():
         
         if material_index in mapping:
             address, led_pin = mapping[material_index]
+            print(f"🔧 Mapping found - Address: {address}, Pin: {led_pin}")
+            
             if address in mcp_devices:
                 device = mcp_devices[address]
                 led_pin_obj = device.get_pin(led_pin)
                 
                 if action == 'on':
                     led_pin_obj.value = True
-                    print(f"Turned ON material {material_index} at {address} pin {led_pin}")
+                    print(f"✅ Turned ON material {material_index} at {address} pin {led_pin}")
                 else:
                     led_pin_obj.value = False
-                    print(f"Turned OFF material {material_index} at {address} pin {led_pin}")
+                    print(f"✅ Turned OFF material {material_index} at {address} pin {led_pin}")
                 
                 return jsonify({'status': 'success'})
             else:
-                return jsonify({'status': 'error', 'error': f'I2C device {address} not connected'})
+                error_msg = f'I2C device {address} not connected'
+                print(f"❌ {error_msg}")
+                return jsonify({'status': 'error', 'error': error_msg})
         
-        return jsonify({'status': 'error', 'error': f'Material {material_index} not found'})
+        error_msg = f'Material {material_index} not found in mapping'
+        print(f"❌ {error_msg}")
+        return jsonify({'status': 'error', 'error': error_msg})
         
     except Exception as e:
-        print(f"Error controlling LED: {e}")
+        error_msg = f"Error controlling LED: {e}"
+        print(f"❌ {error_msg}")
         return jsonify({'status': 'error', 'error': str(e)})
