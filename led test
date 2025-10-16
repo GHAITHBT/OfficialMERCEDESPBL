@@ -1,26 +1,69 @@
-@app.route('/activate_led_test', methods=['POST'])
-def activate_led_test():
-    """Test endpoint to activate LED without waiting for button press"""
+@app.route('/test_led_on', methods=['POST'])
+def test_led_on():
+    """Turn on LED by material index (1-48) using I2C address order"""
     data = request.json
-    material = data.get('material')
+    material_index = data.get('material_index')
     
-    if material in config.get('led_expander_address', {}):
-        # Handle MCP expander LEDs
-        led_addr = config['led_expander_address'][material]
-        led_pin_num = config['led_pin'][material]
-        led_expander = mcp_devices.get(led_addr)
+    if not material_index or material_index < 1 or material_index > 48:
+        return jsonify({'error': 'Invalid material index (must be 1-48)'}), 400
+    
+    try:
+        # Calculate which I2C address and pin based on material index
+        material_count = 0
+        address_index = 0
+        
+        for address, pair_count in I2C_ADDRESS_ORDER:
+            if material_count + pair_count >= material_index:
+                # Found the correct address
+                pin_offset = (material_index - material_count - 1) * 2  # LED pins are even numbers
+                
+                if address in mcp_devices:
+                    device = mcp_devices[address]
+                    led_pin = device.get_pin(pin_offset)
+                    led_pin.value = True
+                    return jsonify({'status': 'success', 'message': f'LED {material_index} on (address {address}, pin {pin_offset})'}), 200
+                else:
+                    return jsonify({'error': f'MCP device at {address} not initialized'}), 500
+            
+            material_count += pair_count
+            address_index += 1
+        
+        return jsonify({'error': 'Material index calculation error'}), 500
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-        if led_expander:
-            led_pin = led_expander.get_pin(led_pin_num)
-            led_pin.value = True  # Turn LED on
-            led_status[material] = True
-            return jsonify({'status': 'success', 'message': f'LED for {material} activated'}), 200
-
-    elif material in config.get('led_pins', {}):
-        # Handle native GPIO LEDs
-        led_pin = config['led_pins'][material]
-        GPIO.output(led_pin, GPIO.HIGH)
-        led_status[material] = True
-        return jsonify({'status': 'success', 'message': f'LED for {material} activated'}), 200
-
-    return jsonify({'error': 'Invalid material'}), 400
+@app.route('/test_led_off', methods=['POST'])
+def test_led_off():
+    """Turn off LED by material index (1-48) using I2C address order"""
+    data = request.json
+    material_index = data.get('material_index')
+    
+    if not material_index or material_index < 1 or material_index > 48:
+        return jsonify({'error': 'Invalid material index (must be 1-48)'}), 400
+    
+    try:
+        # Calculate which I2C address and pin based on material index
+        material_count = 0
+        address_index = 0
+        
+        for address, pair_count in I2C_ADDRESS_ORDER:
+            if material_count + pair_count >= material_index:
+                # Found the correct address
+                pin_offset = (material_index - material_count - 1) * 2  # LED pins are even numbers
+                
+                if address in mcp_devices:
+                    device = mcp_devices[address]
+                    led_pin = device.get_pin(pin_offset)
+                    led_pin.value = False
+                    return jsonify({'status': 'success', 'message': f'LED {material_index} off (address {address}, pin {pin_offset})'}), 200
+                else:
+                    return jsonify({'error': f'MCP device at {address} not initialized'}), 500
+            
+            material_count += pair_count
+            address_index += 1
+        
+        return jsonify({'error': 'Material index calculation error'}), 500
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
