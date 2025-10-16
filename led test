@@ -1,10 +1,12 @@
-@app.route('/test_led_on', methods=['POST'])
-def test_led_on():
+@app.route('/test_led_by_index', methods=['POST'])
+def test_led_by_index():
+    """Simple endpoint to control individual LEDs by material index"""
     try:
         data = request.json
         material_index = data.get('material_index')
+        action = data.get('action')  # 'on' or 'off'
         
-        # Mapping for materials 1-48
+        # Simple mapping for materials 1-48
         mapping = {
             1: ("0x20", 0), 2: ("0x20", 2), 3: ("0x20", 4), 4: ("0x20", 6),
             5: ("0x20", 8), 6: ("0x20", 10), 7: ("0x20", 12), 8: ("0x20", 14),
@@ -25,51 +27,20 @@ def test_led_on():
             if address in mcp_devices:
                 device = mcp_devices[address]
                 led_pin_obj = device.get_pin(led_pin)
-                led_pin_obj.value = True
-                print(f"Turned ON material {material_index} at {address} pin {led_pin}")
+                
+                if action == 'on':
+                    led_pin_obj.value = True
+                    print(f"Turned ON material {material_index} at {address} pin {led_pin}")
+                else:
+                    led_pin_obj.value = False
+                    print(f"Turned OFF material {material_index} at {address} pin {led_pin}")
+                
                 return jsonify({'status': 'success'})
             else:
                 return jsonify({'status': 'error', 'error': f'I2C device {address} not connected'})
         
         return jsonify({'status': 'error', 'error': f'Material {material_index} not found'})
+        
     except Exception as e:
-        print(f"Error turning on LED: {e}")
-        return jsonify({'status': 'error', 'error': str(e)})
-
-@app.route('/test_led_off', methods=['POST'])
-def test_led_off():
-    try:
-        data = request.json
-        material_index = data.get('material_index')
-        
-        # Same mapping
-        mapping = {
-            1: ("0x20", 0), 2: ("0x20", 2), 3: ("0x20", 4), 4: ("0x20", 6),
-            5: ("0x20", 8), 6: ("0x20", 10), 7: ("0x20", 12), 8: ("0x20", 14),
-            9: ("0x21", 0), 10: ("0x21", 2), 11: ("0x21", 4), 12: ("0x21", 6),
-            13: ("0x23", 0), 14: ("0x23", 2), 15: ("0x23", 4), 16: ("0x23", 6),
-            17: ("0x23", 8), 18: ("0x23", 10), 19: ("0x23", 12), 20: ("0x23", 14),
-            21: ("0x26", 0), 22: ("0x26", 2), 23: ("0x26", 4), 24: ("0x26", 6),
-            25: ("0x24", 0), 26: ("0x24", 2), 27: ("0x24", 4), 28: ("0x24", 6),
-            29: ("0x24", 8), 30: ("0x24", 10), 31: ("0x24", 12), 32: ("0x24", 14),
-            33: ("0x22", 0), 34: ("0x22", 2), 35: ("0x22", 4), 36: ("0x22", 6),
-            37: ("0x27", 0), 38: ("0x27", 2), 39: ("0x27", 4), 40: ("0x27", 6),
-            41: ("0x27", 8), 42: ("0x27", 10), 43: ("0x27", 12), 44: ("0x27", 14),
-            45: ("0x25", 0), 46: ("0x25", 2), 47: ("0x25", 4), 48: ("0x25", 6)
-        }
-        
-        if material_index in mapping:
-            address, led_pin = mapping[material_index]
-            if address in mcp_devices:
-                device = mcp_devices[address]
-                led_pin_obj = device.get_pin(led_pin)
-                led_pin_obj.value = False
-                print(f"Turned OFF material {material_index} at {address} pin {led_pin}")
-                return jsonify({'status': 'success'})
-            else:
-                return jsonify({'status': 'error', 'error': f'I2C device {address} not connected'})
-        
-        return jsonify({'status': 'error', 'error': f'Material {material_index} not found'})
-    except Exception as e:
-        print(f"Error turning off LED: {e}")
+        print(f"Error controlling LED: {e}")
         return jsonify({'status': 'error', 'error': str(e)})
