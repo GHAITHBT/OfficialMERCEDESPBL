@@ -1,0 +1,26 @@
+@app.route('/activate_led_test', methods=['POST'])
+def activate_led_test():
+    """Test endpoint to activate LED without waiting for button press"""
+    data = request.json
+    material = data.get('material')
+    
+    if material in config.get('led_expander_address', {}):
+        # Handle MCP expander LEDs
+        led_addr = config['led_expander_address'][material]
+        led_pin_num = config['led_pin'][material]
+        led_expander = mcp_devices.get(led_addr)
+
+        if led_expander:
+            led_pin = led_expander.get_pin(led_pin_num)
+            led_pin.value = True  # Turn LED on
+            led_status[material] = True
+            return jsonify({'status': 'success', 'message': f'LED for {material} activated'}), 200
+
+    elif material in config.get('led_pins', {}):
+        # Handle native GPIO LEDs
+        led_pin = config['led_pins'][material]
+        GPIO.output(led_pin, GPIO.HIGH)
+        led_status[material] = True
+        return jsonify({'status': 'success', 'message': f'LED for {material} activated'}), 200
+
+    return jsonify({'error': 'Invalid material'}), 400
