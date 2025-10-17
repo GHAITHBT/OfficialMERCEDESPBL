@@ -1,83 +1,107 @@
-@app.route('/test_single_led', methods=['POST'])
-def test_single_led():
-    data = request.json
-    material = data.get('material')
-    
-    if not material:
-        return jsonify({'error': 'No material provided'}), 400
+@app.route('/turn_on_leds', methods=['POST'])
+def turn_on_leds():
+    try:
+        data = request.json or {}
+        material = data.get('material')
+        
+        # If no specific material provided, turn on ALL LEDs
+        if not material:
+            # Turn on all MCP expander LEDs
+            if 'led_expander_address' in config:
+                for material_name, led_addr in config['led_expander_address'].items():
+                    led_pin_num = config['led_pin'][material_name]
+                    led_expander = mcp_devices.get(led_addr)
 
-    # Check if material exists in configuration
-    if material in config.get('led_expander_address', {}):
-        # Handle MCP expander LEDs
-        led_addr = config['led_expander_address'][material]
-        led_pin_num = config['led_pin'][material]
-        button_addr = config['button_expander_address'][material]
-        button_pin_num = config['button_pin'][material]
+                    if led_expander:
+                        led_pin = led_expander.get_pin(led_pin_num)
+                        led_pin.value = True
+                        led_status[material_name] = True
 
-        led_expander = mcp_devices.get(led_addr)
-        button_expander = mcp_devices.get(button_addr)
+            # Turn on all native GPIO LEDs
+            if 'led_pins' in config:
+                for pin in config['led_pins'].values():
+                    GPIO.output(pin, GPIO.HIGH)
 
-        if led_expander and button_expander:
-            led_pin = led_expander.get_pin(led_pin_num)
-            button_pin = button_expander.get_pin(button_pin_num)
-
-            # Turn on the LED
-            led_pin.value = True
-            print(f"Test LED for {material} activated. Waiting for button press...")
-
-            # Wait for button press (blocking for testing)
-            start_time = time.time()
-            while True:
-                if not button_pin.value:  # Button pressed (reads as low)
-                    led_pin.value = False  # Turn LED off
-                    print(f"Button pressed for {material}. LED is now OFF.")
-                    return jsonify({
-                        'status': 'success', 
-                        'message': f'Test completed for {material}. LED turned off.'
-                    }), 200
-                
-                # Add timeout to prevent infinite loop (5 minutes timeout)
-                if time.time() - start_time > 300:  # 5 minutes
-                    led_pin.value = False  # Turn LED off on timeout
-                    return jsonify({
-                        'status': 'timeout', 
-                        'message': f'Test timeout for {material}. No button press detected.'
-                    }), 408
-                
-                time.sleep(0.1)
-
+            return jsonify({'status': 'success', 'message': 'All LEDs turned on'}), 200
+        
+        # If specific material provided, turn on only that LED and wait for button press
         else:
-            return jsonify({'error': f'Expander not found for {material}'}), 400
+            if material in config.get('led_expander_address', {}):
+                # Handle MCP expander LEDs
+                led_addr = config['led_expander_address'][material]
+                led_pin_num = config['led_pin'][material]
+                button_addr = config['button_expander_address'][material]
+                button_pin_num = config['button_pin'][material]
 
-    elif material in config.get('led_pins', {}):
-        # Handle native GPIO LEDs
-        led_pin = config['led_pins'][material]
-        button_pin = config['button_pins'][material]
+                led_expander = mcp_devices.get(led_addr)
+                button_expander = mcp_devices.get(button_addr)
 
-        # Turn on the LED
-        GPIO.output(led_pin, GPIO.HIGH)
-        print(f"Test LED for {material} activated. Waiting for button press...")
+                if led_expander and button_expander:
+                    led_pin = led_expander.get_pin(led_pin_num)
+                    button_pin = button_expander.get_pin(button_pin_num)
 
-        # Wait for button press
-        start_time = time.time()
-        while True:
-            if GPIO.input(button_pin) == GPIO.LOW:
-                GPIO.output(led_pin, GPIO.LOW)
-                print(f"Button pressed for {material}. LED is now OFF.")
-                return jsonify({
-                    'status': 'success', 
-                    'message': f'Test completed for {material}. LED turned off.'
-                }), 200
-            
-            # Add timeout to prevent infinite loop (5 minutes timeout)
-            if time.time() - start_time > 300:  # 5 minutes
-                GPIO.output(led_pin, GPIO.LOW)  # Turn LED off on timeout
-                return jsonify({
-                    'status': 'timeout', 
-                    'message': f'Test timeout for {material}. No button press detected.'
-                }), 408
-            
-            time.sleep(0.1)
+                    # Turn on the LED
+                    led_pin.value = True
+                    led_status[material] = True
+                    print(f"Test LED for {material} activated. Waiting for button press...")
 
-    else:
-        return jsonify({'error': f'Invalid material: {material}'}), 400
+                    # Wait for button press (blocking for testing)
+                    start_time = time.time()
+                    while True:
+                        if not button_pin.value:  # Button pressed (reads as low)
+                            led_pin.value = False  # Turn LED off
+                            led_status[material] = False
+                            print(f"Button pressed for {material}. LED is now OFF.")
+                            return jsonify({
+                                'status': 'success', 
+                                'message': f'Test completed for {material}. LED turned off.'
+                            }), 200
+                        
+                        # Add timeout to prevent infinite loop (5 minutes timeout)
+                        if time.time() - start_time > 300:  # 5 minutes
+                            led_pin.value = False  # Turn LED off on timeout
+                            return jsonify({
+                                'status': 'timeout', 
+                                'message': f'Test timeout for {material}. No button press detected.'
+                            }), 408
+                        
+                        time.sleep(0.1)
+                else:
+                    return jsonify({'error': f'Expander not found for {material}'}), 400
+
+            elif material in config.get('led_pins', {}):
+                # Handle native GPIO LEDs
+                led_pin = config['led_pins'][material]
+                button_pin = config['button_pins'][material]
+
+                # Turn on the LED
+                GPIO.output(led_pin, GPIO.HIGH)
+                led_status[material] = True
+                print(f"Test LED for {material} activated. Waiting for button press...")
+
+                # Wait for button press
+                start_time = time.time()
+                while True:
+                    if GPIO.input(button_pin) == GPIO.LOW:
+                        GPIO.output(led_pin, GPIO.LOW)
+                        led_status[material] = False
+                        print(f"Button pressed for {material}. LED is now OFF.")
+                        return jsonify({
+                            'status': 'success', 
+                            'message': f'Test completed for {material}. LED turned off.'
+                        }), 200
+                    
+                    # Add timeout to prevent infinite loop (5 minutes timeout)
+                    if time.time() - start_time > 300:  # 5 minutes
+                        GPIO.output(led_pin, GPIO.LOW)  # Turn LED off on timeout
+                        return jsonify({
+                            'status': 'timeout', 
+                            'message': f'Test timeout for {material}. No button press detected.'
+                        }), 408
+                    
+                    time.sleep(0.1)
+            else:
+                return jsonify({'error': f'Invalid material: {material}'}), 400
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
