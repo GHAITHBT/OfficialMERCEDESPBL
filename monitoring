@@ -1,0 +1,21 @@
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for workstation monitoring"""
+    try:
+        health_data = {
+            'status': 'online',
+            'timestamp': datetime.now().isoformat(),
+            'hostname': socket.gethostname(),
+            'active_leds': list(led_status.keys()),
+            'i2c_devices': list(mcp_devices.keys()),
+            'materials_configured': len(config.get('led_expander_address', {})),
+            'version': '1.0'
+        }
+        return jsonify(health_data), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/led_status', methods=['GET'])
+def led_status_endpoint():
+    """Simple endpoint to check if Raspberry Pi is responsive"""
+    return jsonify({'status': 'ok'}), 200
