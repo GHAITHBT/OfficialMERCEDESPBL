@@ -4,8 +4,6 @@ import socket
 import requests
 import time
 import threading
-import mysql.connector
-from mysql.connector import pooling
 import json
 import subprocess
 import socketio
@@ -33,24 +31,6 @@ I2C_ADDRESS_ORDER = [
     ("0x25", 4)   # 4 pairs
 ]
 
-# Database configuration
-db_config = {
-    'host': '10.110.3.102',
-    'user': 'root',
-    'password': 'Passw0rd123',
-    'database': 'PickByLight'
-}
-
-# Set up database connection pool
-mysql_pool = pooling.MySQLConnectionPool(
-    pool_name="mysql_pool",
-    pool_size=5,
-    **db_config
-)
-
-def get_db_connection():
-    return mysql_pool.get_connection()
-
 # Set up I2C bus
 i2c = busio.I2C(board.SCL, board.SDA)
 
@@ -60,7 +40,7 @@ mcp_devices = {}
 # Track LED and button status
 led_status = {}
 
-def ping_server(host="10.110.30.15"):
+def ping_server(host="10.110.30.77"):
     """
     Ping the specified host to check connectivity.
     Returns True if ping is successful, False otherwise.
@@ -352,48 +332,10 @@ def fetch_configuration():
         except Exception as e:
             print(f"Unexpected error fetching configuration: {e}")
     
-    # Fallback: Try direct database connection if API fails
-    print("API fetch failed, attempting direct database connection...")
-    return fetch_configuration_fallback()
-
-
-def fetch_configuration_fallback():
-    """
-    Fallback method to fetch configuration directly from database.
-    Used if API is unavailable.
-    """
-    ip_address = get_ip_address()
-    connection = get_db_connection()
-    try:
-        cursor = connection.cursor(dictionary=True)
-        
-        # Fetch MCP expander configuration
-        cursor.execute('SELECT * FROM rasp_pi_configurations3 WHERE ip_address = %s', (ip_address,))
-        mcp_config = cursor.fetchone()
-        
-        # Fetch native GPIO configuration
-        cursor.execute('SELECT * FROM rasp_pi_configurations WHERE ip_address = %s', (ip_address,))
-        gpio_config = cursor.fetchone()
-
-        config = {}
-        if mcp_config:
-            # Parse JSON fields for MCP expanders
-            mcp_config['led_expander_address'] = json.loads(mcp_config['led_expander_address'])
-            mcp_config['led_pin'] = json.loads(mcp_config['led_pin'])
-            mcp_config['button_expander_address'] = json.loads(mcp_config['button_expander_address'])
-            mcp_config['button_pin'] = json.loads(mcp_config['button_pin'])
-            config.update(mcp_config)
-
-        if gpio_config:
-            # Parse JSON fields for native GPIO
-            gpio_config['led_pins'] = json.loads(gpio_config['led_pins'])
-            gpio_config['button_pins'] = json.loads(gpio_config['button_pins'])
-            config.update(gpio_config)
-
-        return config
-    finally:
-        cursor.close()
-        connection.close()
+    # Failed to fetch configuration from API
+    print("ERROR: Failed to fetch configuration from API after 3 attempts.")
+    print("Please ensure the main app is running and accessible.")
+    raise Exception("Configuration fetch failed - API unavailable")
 
 config = fetch_configuration()
 
