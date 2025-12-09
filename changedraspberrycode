@@ -40,7 +40,7 @@ mcp_devices = {}
 # Track LED and button status
 led_status = {}
 
-def ping_server(host="10.110.30.77"):
+def ping_server(host="10.110.30.15"):
     """
     Ping the specified host to check connectivity.
     Returns True if ping is successful, False otherwise.
@@ -521,7 +521,7 @@ def turn_off_leds():
 @app.route('/refresh_configuration', methods=['POST'])
 def refresh_configuration():
     try:
-        # Fetch the latest configuration from the database
+        # Fetch the latest configuration from the API
         global config
         config = fetch_configuration()
 
@@ -1046,6 +1046,7 @@ def test_led_control():
                         'pin': led_pin_num
                     }), 200
                 except Exception as e:
+                    print(f"Error controlling MCP LED: {str(e)}")
                     return jsonify({
                         'status': 'error',
                         'message': f'Failed to control LED: {str(e)}',
@@ -1069,6 +1070,7 @@ def test_led_control():
                     'pin': led_pin
                 }), 200
             except Exception as e:
+                print(f"Error controlling GPIO LED: {str(e)}")
                 return jsonify({
                     'status': 'error',
                     'message': f'Failed to control LED: {str(e)}',
@@ -1083,7 +1085,10 @@ def test_led_control():
             
     except Exception as e:
         print(f"Error in test_led_control: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'message': f'Server error: {str(e)}'
+        }), 500
 
 def send_heartbeat():
     """
